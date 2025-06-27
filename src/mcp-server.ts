@@ -13,40 +13,27 @@ import {
 } from './note-utils.js';
 
 export function configureMcpServerInstance(server: McpServer): void {
-    // Resource: list all notes
-    server.resource('notes', 'sb-notes://all', async () => {
-        try {
-            const notesData = await listNotesAPI();
-            const result = {
-                contents: [
-                    {
-                        uri: 'sb-notes://all',
-                        text: JSON.stringify(
-                            notesData.map((n) => ({
-                                name: n.name,
-                                uri: `sb-note://${encodeURIComponent(n.name)}`,
-                                permissions: n.perm,
-                            })),
-                            null,
-                            2
-                        ),
-                    },
-                ],
-            };
-            return result;
-        } catch (error) {
-            console.error(`[MCP Resource: notes] Error:`, error);
-            throw error;
-        }
-    });
-
-    // Resource: read a single note
-    server.resource(
+    // Resource: read a single note or list all notes
+    server.registerResource(
         'note',
-        new ResourceTemplate('sb-note://{filename}', { list: undefined }),
-        async (uri, { filename }) => {
+        new ResourceTemplate('sb-note://{filename}', {
+            list: async () => {
+                const notesData = await listNotesAPI();
+                return {
+                    resources: notesData.map((n) => ({
+                        uri: `sb-note://${encodeURIComponent(n.name)}`,
+                        name: n.name,
+                    })),
+                };
+            },
+        }),
+        {
+            title: 'Note',
+            description: 'Read a single note or list all notes',
+        },
+        async (params: any, { uri }: any) => {
             try {
-                const fname = decodeURIComponent(filename as string);
+                const fname = decodeURIComponent(params.filename as string);
                 const text = await readNoteAPI(fname);
                 const result = {
                     contents: [
@@ -59,44 +46,48 @@ export function configureMcpServerInstance(server: McpServer): void {
                 };
                 return result;
             } catch (error) {
-                console.error(`[MCP Resource: note] Error reading note ${filename}:`, error);
+                console.error(`[MCP Resource: note] Error reading note ${params.filename}:`, error);
                 throw error;
             }
         }
     );
 
     // Tool: read multiple notes with flexible input options
-    server.tool(
+    server.registerTool(
         'read-multiple-notes',
         {
-            filenames: z
-                .array(z.string())
-                .optional()
-                .describe('Array of specific note filenames to read (e.g., ["note1.md", "note2.md"])'),
-            namePattern: z
-                .string()
-                .optional()
-                .describe('Regex pattern to match note names (e.g., "project.*" for notes starting with "project")'),
-            includeContent: z
-                .boolean()
-                .default(true)
-                .describe('Whether to include full note content in response'),
-            includeMetadata: z
-                .boolean()
-                .default(true)
-                .describe('Whether to include file metadata (size, permissions, etc.)'),
-            maxResults: z
-                .number()
-                .default(50)
-                .describe('Maximum number of notes to return (prevents overload)'),
-            enableCaching: z
-                .boolean()
-                .default(true)
-                .describe('Whether to use content caching for better performance'),
-            format: z
-                .enum(['structured', 'concatenated', 'summary'])
-                .default('structured')
-                .describe('Output format: structured (detailed), concatenated (combined content), or summary (previews only)'),
+            title: 'Read Multiple Notes',
+            description: 'Read multiple notes with flexible input options',
+            inputSchema: {
+                filenames: z
+                    .array(z.string())
+                    .optional()
+                    .describe('Array of specific note filenames to read (e.g., ["note1.md", "note2.md"])'),
+                namePattern: z
+                    .string()
+                    .optional()
+                    .describe('Regex pattern to match note names (e.g., "project.*" for notes starting with "project")'),
+                includeContent: z
+                    .boolean()
+                    .default(true)
+                    .describe('Whether to include full note content in response'),
+                includeMetadata: z
+                    .boolean()
+                    .default(true)
+                    .describe('Whether to include file metadata (size, permissions, etc.)'),
+                maxResults: z
+                    .number()
+                    .default(50)
+                    .describe('Maximum number of notes to return (prevents overload)'),
+                enableCaching: z
+                    .boolean()
+                    .default(true)
+                    .describe('Whether to use content caching for better performance'),
+                format: z
+                    .enum(['structured', 'concatenated', 'summary'])
+                    .default('structured')
+                    .describe('Output format: structured (detailed), concatenated (combined content), or summary (previews only)'),
+            },
         },
         async ({ filenames, namePattern, includeContent, includeMetadata, maxResults, enableCaching, format }) => {
             try {
@@ -195,15 +186,19 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: search and replace in a note
-    server.tool(
+    server.registerTool(
         'search-replace-note',
         {
-            filename: z.string().describe('The filename of the note to modify'),
-            searchPattern: z.string().describe('The text or regex pattern to search for'),
-            replaceText: z.string().describe('The text to replace matches with'),
-            useRegex: z.boolean().default(false).describe('Whether to treat searchPattern as a regex'),
-            caseSensitive: z.boolean().default(false).describe('Whether search should be case-sensitive'),
-            replaceAll: z.boolean().default(true).describe('Whether to replace all matches or just the first one'),
+            title: 'Search and Replace In Note',
+            description: 'Search for text in a note and replace it.',
+            inputSchema: {
+                filename: z.string().describe('The filename of the note to modify'),
+                searchPattern: z.string().describe('The text or regex pattern to search for'),
+                replaceText: z.string().describe('The text to replace matches with'),
+                useRegex: z.boolean().default(false).describe('Whether to treat searchPattern as a regex'),
+                caseSensitive: z.boolean().default(false).describe('Whether search should be case-sensitive'),
+                replaceAll: z.boolean().default(true).describe('Whether to replace all matches or just the first one'),
+            },
         },
         async ({ filename, searchPattern, replaceText, useRegex, caseSensitive, replaceAll }) => {
             try {
@@ -219,14 +214,14 @@ export function configureMcpServerInstance(server: McpServer): void {
                         searchRegex = new RegExp(searchPattern, flags);
                     } catch (error) {
                         // If regex is invalid, escape special characters and treat as literal
-                        const escapedPattern = searchPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const escapedPattern = searchPattern.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
                         const flags = caseSensitive ? (replaceAll ? 'g' : '') : (replaceAll ? 'gi' : 'i');
                         searchRegex = new RegExp(escapedPattern, flags);
                         regexInvalidFallback = true;
                     }
                 } else {
                     // Escape the search pattern for literal matching
-                    const escapedPattern = searchPattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const escapedPattern = searchPattern.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
                     const flags = caseSensitive ? (replaceAll ? 'g' : '') : (replaceAll ? 'gi' : 'i');
                     searchRegex = new RegExp(escapedPattern, flags);
                 }
@@ -284,22 +279,25 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: list all notes with optional filtering
-    server.tool(
+    server.registerTool(
         'list-notes',
         {
-            namePattern: z
-                .string()
-                .optional()
-                .describe('Optional javascript regex pattern to filter note names (e.g., "project.*" for notes starting with "project")'),
-            permission: z
-                .enum(['rw', 'ro'])
-                .optional()
-                .optional()
-                .describe('Filter by permission: "rw" for read-write, "ro" for read-only'),
+            title: 'List Notes',
+            description: 'List all notes with optional filtering',
+            inputSchema: {
+                namePattern: z
+                    .string()
+                    .optional()
+                    .describe('Optional javascript regex pattern to filter note names (e.g., "project.*" for notes starting with "project")'),
+                permission: z
+                    .enum(['rw', 'ro'])
+                    .optional()
+                    .describe('Filter by permission: "rw" for read-write, "ro" for read-only'),
             },
-            async ({ namePattern, permission }) => {
-                try {
-                    let notes = await listNotesAPI();
+        },
+        async ({ namePattern, permission }) => {
+            try {
+                let notes = await listNotesAPI();
                 // Apply name pattern filter
                 if (namePattern) {
                     const regex = new RegExp(namePattern, 'i');
@@ -352,26 +350,30 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: full-text search across notes with concise output and paging
-    server.tool(
+    server.registerTool(
         'search-notes',
         {
-            query: z.string().describe('Search query (supports javascript regex patterns)'),
-            searchType: z
-                .enum(['content', 'title', 'both'])
-                .default('both')
-                .describe('Where to search: content, title (filename), or both'),
-            caseSensitive: z.boolean().default(false).describe('Whether search should be case-sensitive'),
-            maxResults: z.number().default(10).describe('Maximum number of results to return per page'),
-            page: z.number().default(1).describe('Page number for pagination (1-based)'),
-            contextLines: z
-                .number()
-                .default(1)
-                .describe('Number of lines of context to show around each match (reduced default for conciseness)'),
-            concise: z.boolean().default(true).describe('Return concise output optimized for LLM consumption'),
-            enableCaching: z
-                .boolean()
-                .default(true)
-                .describe('Enable content caching with modification time validation'),
+            title: 'Search Notes',
+            description: 'Full-text search across notes with concise output and paging',
+            inputSchema: {
+                query: z.string().describe('Search query (supports javascript regex patterns)'),
+                searchType: z
+                    .enum(['content', 'title', 'both'])
+                    .default('both')
+                    .describe('Where to search: content, title (filename), or both'),
+                caseSensitive: z.boolean().default(false).describe('Whether search should be case-sensitive'),
+                maxResults: z.number().default(10).describe('Maximum number of results to return per page'),
+                page: z.number().default(1).describe('Page number for pagination (1-based)'),
+                contextLines: z
+                    .number()
+                    .default(1)
+                    .describe('Number of lines of context to show around each match (reduced default for conciseness)'),
+                concise: z.boolean().default(true).describe('Return concise output optimized for LLM consumption'),
+                enableCaching: z
+                    .boolean()
+                    .default(true)
+                    .describe('Enable content caching with modification time validation'),
+            },
         },
         async ({
             query,
@@ -394,7 +396,7 @@ export function configureMcpServerInstance(server: McpServer): void {
                     searchRegex = new RegExp(query, flags);
                 } catch (error) {
                     // If regex is invalid, escape special characters and treat as literal
-                    const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const escapedQuery = query.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
                     searchRegex = new RegExp(escapedQuery, flags);
                     regexInvalidFallback = true;
                 }
@@ -603,11 +605,15 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: read a note
-    server.tool(
+    server.registerTool(
         'read-note',
         {
-            filename: z.string().describe('The filename of the note to read'),
-            suggestSimilar: z.boolean().default(true).describe('Whether to suggest similar note names if the note is not found'),
+            title: 'Read Note',
+            description: 'Read a single note',
+            inputSchema: {
+                filename: z.string().describe('The filename of the note to read'),
+                suggestSimilar: z.boolean().default(true).describe('Whether to suggest similar note names if the note is not found'),
+            },
         },
         async ({ filename, suggestSimilar }) => {
             try {
@@ -662,12 +668,16 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: create a new note
-    server.tool(
+    server.registerTool(
         'create-note',
         {
-            filename: z.string().describe('The filename for the new note (should end with .md)'),
-            content: z.string().describe('The content for the new note'),
-            overwrite: z.boolean().default(false).describe('Whether to overwrite existing note if it exists'),
+            title: 'Create Note',
+            description: 'Create a new note',
+            inputSchema: {
+                filename: z.string().describe('The filename for the new note (should end with .md)'),
+                content: z.string().describe('The content for the new note'),
+                overwrite: z.boolean().default(false).describe('Whether to overwrite existing note if it exists'),
+            },
         },
         async ({ filename, content, overwrite }) => {
             try {
@@ -731,10 +741,14 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: delete a note
-    server.tool(
+    server.registerTool(
         'delete-note',
         {
-            filename: z.string().describe('The filename of the note to delete (should end with .md)'),
+            title: 'Delete Note',
+            description: 'Delete a note',
+            inputSchema: {
+                filename: z.string().describe('The filename of the note to delete (should end with .md)'),
+            },
         },
         async ({ filename }) => {
             try {
