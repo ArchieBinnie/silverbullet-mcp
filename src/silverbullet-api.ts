@@ -29,7 +29,7 @@ const handleResponseError = async (url: string, response: Response, context: str
 };
 
 export async function listNotesAPI(): Promise<NoteInfo[]> {
-    const url = `${SB_API_BASE_URL}/index.json`;
+    const url = `${SB_API_BASE_URL}/.fs`;
     const fetchHeaders = createFetchHeaders();
 
     let response: Response;
@@ -48,7 +48,7 @@ export async function listNotesAPI(): Promise<NoteInfo[]> {
     try {
         const files: SBFile[] = await response!.json();
         return files
-            .filter((f) => f.name.endsWith('.md'))
+            .filter((f) => f.name.endsWith('.md') && !f.name.startsWith('Library'))
             .map((f) => ({ name: f.name, perm: f.perm }));
     } catch (error) {
         console.error(`[listNotesAPI] Failed to parse JSON response:`, error);
@@ -69,7 +69,7 @@ export async function listNotesAPI(): Promise<NoteInfo[]> {
 }
 
 export async function getFullFileListingAPI(): Promise<SBFile[]> {
-    const url = `${SB_API_BASE_URL}/index.json`;
+    const url = `${SB_API_BASE_URL}/.fs`;
     const fetchHeaders = createFetchHeaders();
 
     const response = await fetch(url, { headers: fetchHeaders });
@@ -79,11 +79,13 @@ export async function getFullFileListingAPI(): Promise<SBFile[]> {
     }
 
     const files: SBFile[] = await response.json();
-    return files.filter((f) => f.name.endsWith('.md'));
+    const result = files.filter((f) => f.name.endsWith('.md') && !f.name.startsWith('Library'));
+    return result;
 }
 
 export async function readNoteAPI(filename: string): Promise<string> {
-    const url = `${SB_API_BASE_URL}/${encodeURIComponent(filename)}`;
+    console.log(`[readNoteAPI] Reading note ${filename}`);
+    const url = `${SB_API_BASE_URL}/.fs/${encodeURIComponent(filename)}`;
     const fetchHeaders = createFetchHeaders();
 
     let response: Response;
@@ -112,7 +114,7 @@ export async function readNoteAPI(filename: string): Promise<string> {
 }
 
 export async function writeNoteAPI(filename: string, content: string): Promise<void> {
-    const url = `${SB_API_BASE_URL}/${encodeURIComponent(filename)}`;
+    const url = `${SB_API_BASE_URL}/.fs/${encodeURIComponent(filename)}`;
     const fetchHeaders: HeadersInit = {
         'Content-Type': 'text/markdown',
         'X-Sync-Mode': 'true',
@@ -139,7 +141,7 @@ export async function writeNoteAPI(filename: string, content: string): Promise<v
 }
 
 export async function deleteNoteAPI(filename: string): Promise<void> {
-    const url = `${SB_API_BASE_URL}/${encodeURIComponent(filename)}`;
+    const url = `${SB_API_BASE_URL}/.fs/${encodeURIComponent(filename)}`;
     const fetchHeaders = createFetchHeaders();
 
     let response: Response;
