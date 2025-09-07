@@ -11,6 +11,7 @@ import {
     ContentManager,
     type MultiNoteRequest
 } from './note-utils.js';
+import { URL } from 'node:url';
 
 export function configureMcpServerInstance(server: McpServer): void {
     // Resource: read a single note or list all notes
@@ -19,26 +20,27 @@ export function configureMcpServerInstance(server: McpServer): void {
         new ResourceTemplate('sb-note://{filename}', {
             list: async () => {
                 const notesData = await listNotesAPI();
-                return {
+                const result = {
                     resources: notesData.map((n) => ({
                         uri: `sb-note://${encodeURIComponent(n.name)}`,
                         name: n.name,
                     })),
                 };
+                return result;
             },
         }),
         {
             title: 'Note',
             description: 'Read a single note or list all notes',
         },
-        async (params: any, { uri }: any) => {
-            try {
-                const fname = decodeURIComponent(params.filename as string);
-                const text = await readNoteAPI(fname);
+        async (params: URL, { uri }: any) => {
+            const noteName = decodeURIComponent(params.hostname as string);
+            try {         
+                const text = await readNoteAPI(noteName);
                 const result = {
                     contents: [
                         {
-                            uri: uri.href,
+                            uri: params.href,
                             text,
                             mimeType: 'text/markdown',
                         },
@@ -46,7 +48,7 @@ export function configureMcpServerInstance(server: McpServer): void {
                 };
                 return result;
             } catch (error) {
-                console.error(`[MCP Resource: note] Error reading note ${params.filename}:`, error);
+                console.error(`[MCP Resource: note] Error reading note ${noteName}:`, error);
                 throw error;
             }
         }

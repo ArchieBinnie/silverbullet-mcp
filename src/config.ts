@@ -1,7 +1,7 @@
 // Configuration constants
 
 export const PORT = process.env.PORT ? parseInt(process.env.PORT) : 4000;
-export const SB_API_BASE_URL = process.env.SB_API_BASE_URL || 'http://silverbullet:3000';
+export const SB_API_BASE_URL = (process.env.SB_API_BASE_URL || 'http://silverbullet:3000').replace(/\/$/, '');
 export const SB_AUTH_TOKEN = process.env.SB_AUTH_TOKEN;
 export const MCP_TOKEN = process.env.MCP_TOKEN;
 
