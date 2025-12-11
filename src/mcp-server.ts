@@ -60,6 +60,9 @@ export function configureMcpServerInstance(server: McpServer): void {
         {
             title: 'Read Multiple Notes',
             description: 'Read multiple notes with flexible input options',
+            annotations: {
+                readOnlyHint: true,
+            },
             inputSchema: {
                 filenames: z
                     .array(z.string())
@@ -193,6 +196,9 @@ export function configureMcpServerInstance(server: McpServer): void {
         {
             title: 'Search and Replace In Note',
             description: 'Search for text in a note and replace it.',
+            annotations: {
+                destructiveHint: true,
+            },
             inputSchema: {
                 filename: z.string().describe('The filename of the note to modify'),
                 searchPattern: z.string().describe('The text or regex pattern to search for'),
@@ -286,6 +292,9 @@ export function configureMcpServerInstance(server: McpServer): void {
         {
             title: 'List Notes',
             description: 'List all notes with optional filtering',
+            annotations: {
+                readOnlyHint: true,
+            },
             inputSchema: {
                 namePattern: z
                     .string()
@@ -357,6 +366,9 @@ export function configureMcpServerInstance(server: McpServer): void {
         {
             title: 'Search Notes',
             description: 'Full-text search across notes with concise output and paging',
+            annotations: {
+                readOnlyHint: true,
+            },
             inputSchema: {
                 query: z.string().describe('Search query (supports javascript regex patterns)'),
                 searchType: z
@@ -612,6 +624,9 @@ export function configureMcpServerInstance(server: McpServer): void {
         {
             title: 'Read Note',
             description: 'Read a single note',
+            annotations: {
+                readOnlyHint: true,
+            },
             inputSchema: {
                 filename: z.string().describe('The filename of the note to read'),
                 suggestSimilar: z.boolean().default(true).describe('Whether to suggest similar note names if the note is not found'),
@@ -675,6 +690,9 @@ export function configureMcpServerInstance(server: McpServer): void {
         {
             title: 'Create Note',
             description: 'Create a new note',
+            annotations: {
+                destructiveHint: true,
+            },
             inputSchema: {
                 filename: z.string().describe('The filename for the new note (should end with .md)'),
                 content: z.string().describe('The content for the new note'),
@@ -748,6 +766,9 @@ export function configureMcpServerInstance(server: McpServer): void {
         {
             title: 'Delete Note',
             description: 'Delete a note',
+            annotations: {
+                destructiveHint: true,
+            },
             inputSchema: {
                 filename: z.string().describe('The filename of the note to delete (should end with .md)'),
             },
