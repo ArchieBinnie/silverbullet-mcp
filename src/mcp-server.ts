@@ -13,6 +13,10 @@ import {
 } from './note-utils.js';
 import { URL } from 'node:url';
 
+// --- Imports for patched tools ---
+import { readNoteRendered } from './silverbullet-renderer.js';
+import { renamePage, syncSystem, validateLua, runQuery } from './silverbullet-actions.js';
+
 export function configureMcpServerInstance(server: McpServer): void {
     // Resource: read a single note or list all notes
     server.registerResource(
@@ -55,7 +59,7 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: read multiple notes with flexible input options
-    server.registerTool(
+    (server as any).registerTool(
         'read-multiple-notes',
         {
             title: 'Read Multiple Notes',
@@ -94,7 +98,7 @@ export function configureMcpServerInstance(server: McpServer): void {
                     .describe('Output format: structured (detailed), concatenated (combined content), or summary (previews only)'),
             },
         },
-        async ({ filenames, namePattern, includeContent, includeMetadata, maxResults, enableCaching, format }) => {
+        async ({ filenames, namePattern, includeContent, includeMetadata, maxResults, enableCaching, format }: any) => {
             try {
                 // Validate input
                 if (!filenames && !namePattern) {
@@ -191,7 +195,7 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: search and replace in a note
-    server.registerTool(
+    (server as any).registerTool(
         'search-replace-note',
         {
             title: 'Search and Replace In Note',
@@ -208,7 +212,7 @@ export function configureMcpServerInstance(server: McpServer): void {
                 replaceAll: z.boolean().default(true).describe('Whether to replace all matches or just the first one'),
             },
         },
-        async ({ filename, searchPattern, replaceText, useRegex, caseSensitive, replaceAll }) => {
+        async ({ filename, searchPattern, replaceText, useRegex, caseSensitive, replaceAll }: any) => {
             try {
                 // Read the current content
                 const content = await readNoteAPI(filename);
@@ -252,6 +256,27 @@ export function configureMcpServerInstance(server: McpServer): void {
                 // Perform replacement
                 const newContent = content.replace(searchRegex, replaceText);
                 
+                // --- Validation Hook (Direct Source) ---
+                {
+                    const luaBlockRegex = /```space-lua[\s\S]*?```/g;
+                    const luaBlocks = newContent.match(luaBlockRegex);
+                    if (luaBlocks) {
+                        console.log(`[mcp-server] Validating ${luaBlocks.length} Space Lua blocks before write...`);
+                        for (const block of luaBlocks) {
+                            const code = block.replace(/```space-lua[\n\r]?/, '').replace(/```$/, '');
+                            const validation = await validateLua(code);
+                            if (!validation.valid) {
+                                console.error(`[mcp-server] LUA VALIDATION FAILED: ${validation.error}`);
+                                return {
+                                    content: [{ type: 'text', text: `LUA VALIDATION FAILED: ${validation.error}` }],
+                                    isError: true
+                                };
+                            }
+                        }
+                        console.log("[mcp-server] Lua validation passed.");
+                    }
+                }
+
                 // Write back the modified content
                 await writeNoteAPI(filename, newContent);
 
@@ -287,7 +312,7 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: list all notes with optional filtering
-    server.registerTool(
+    (server as any).registerTool(
         'list-notes',
         {
             title: 'List Notes',
@@ -306,7 +331,7 @@ export function configureMcpServerInstance(server: McpServer): void {
                     .describe('Filter by permission: "rw" for read-write, "ro" for read-only'),
             },
         },
-        async ({ namePattern, permission }) => {
+        async ({ namePattern, permission }: any) => {
             try {
                 let notes = await listNotesAPI();
                 // Apply name pattern filter
@@ -361,7 +386,7 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: full-text search across notes with concise output and paging
-    server.registerTool(
+    (server as any).registerTool(
         'search-notes',
         {
             title: 'Search Notes',
@@ -398,7 +423,7 @@ export function configureMcpServerInstance(server: McpServer): void {
             contextLines,
             concise,
             enableCaching,
-        }) => {
+        }: any) => {
             try {
                 const notes = await listNotesAPI();
                 const searchResults = [];
@@ -619,7 +644,7 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: read a note
-    server.registerTool(
+    (server as any).registerTool(
         'read-note',
         {
             title: 'Read Note',
@@ -632,7 +657,7 @@ export function configureMcpServerInstance(server: McpServer): void {
                 suggestSimilar: z.boolean().default(true).describe('Whether to suggest similar note names if the note is not found'),
             },
         },
-        async ({ filename, suggestSimilar }) => {
+        async ({ filename, suggestSimilar }: any) => {
             try {
                 const content = await readNoteAPI(filename);
                 return {
@@ -685,7 +710,7 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: create a new note
-    server.registerTool(
+    (server as any).registerTool(
         'create-note',
         {
             title: 'Create Note',
@@ -699,7 +724,7 @@ export function configureMcpServerInstance(server: McpServer): void {
                 overwrite: z.boolean().default(false).describe('Whether to overwrite existing note if it exists'),
             },
         },
-        async ({ filename, content, overwrite }) => {
+        async ({ filename, content, overwrite }: any) => {
             try {
                 if (!filename.endsWith('.md')) {
                     return {
@@ -732,6 +757,27 @@ export function configureMcpServerInstance(server: McpServer): void {
                     }
                 }
 
+                // --- Validation Hook (Direct Source) ---
+                {
+                    const luaBlockRegex = /```space-lua[\s\S]*?```/g;
+                    const luaBlocks = content.match(luaBlockRegex);
+                    if (luaBlocks) {
+                        console.log(`[mcp-server] Validating ${luaBlocks.length} Space Lua blocks before write...`);
+                        for (const block of luaBlocks) {
+                            const code = block.replace(/```space-lua[\n\r]?/, '').replace(/```$/, '');
+                            const validation = await validateLua(code);
+                            if (!validation.valid) {
+                                console.error(`[mcp-server] LUA VALIDATION FAILED: ${validation.error}`);
+                                return {
+                                    content: [{ type: 'text', text: `LUA VALIDATION FAILED: ${validation.error}` }],
+                                    isError: true
+                                };
+                            }
+                        }
+                        console.log("[mcp-server] Lua validation passed.");
+                    }
+                }
+
                 await writeNoteAPI(filename, content);
                 
                 const action = overwrite ? 'created/updated' : 'created';
@@ -761,7 +807,7 @@ export function configureMcpServerInstance(server: McpServer): void {
     );
 
     // Tool: delete a note
-    server.registerTool(
+    (server as any).registerTool(
         'delete-note',
         {
             title: 'Delete Note',
@@ -773,7 +819,7 @@ export function configureMcpServerInstance(server: McpServer): void {
                 filename: z.string().describe('The filename of the note to delete (should end with .md)'),
             },
         },
-        async ({ filename }) => {
+        async ({ filename }: any) => {
             try {
                 if (!filename.endsWith('.md')) {
                     return {
@@ -809,6 +855,100 @@ export function configureMcpServerInstance(server: McpServer): void {
                     isError: true,
                 };
             }
+        }
+    );
+
+    // --- New Patched Tools (Direct Source) ---
+
+    (server as any).registerTool(
+        'read-note-rendered',
+        {
+            title: 'Read Note Rendered',
+            description: 'Read a SilverBullet note with all Space Lua queries and template expressions fully evaluated. Slower than read-note (~5-15s) but returns rendered output. Use when a note contains dynamic queries that read-note returns as literal text.',
+            annotations: {
+                readOnlyHint: true,
+            },
+            inputSchema: {
+                filename: z.string().describe('The filename of the note to read, e.g. "index.md"'),
+            },
+        },
+        async ({ filename }: any) => {
+            const content = await readNoteRendered(filename);
+            return {
+                content: [{ type: 'text', text: content }],
+            };
+        }
+    );
+
+    (server as any).registerTool(
+        'rename-page',
+        {
+            title: 'Rename Page',
+            description: 'Rename/move a SilverBullet page and automatically update all wikilinks that reference it. Uses the native SilverBullet rename pipeline via a headless browser.',
+            annotations: {
+                destructiveHint: true,
+            },
+            inputSchema: {
+                oldFilename: z.string().describe('Current filename of the page'),
+                newFilename: z.string().describe('Target filename for the page'),
+            },
+        },
+        async ({ oldFilename, newFilename }: any) => {
+            const result = await renamePage(oldFilename, newFilename);
+            return {
+                content: [{ type: 'text', text: result.message }],
+            };
+        }
+    );
+
+    (server as any).registerTool(
+        'sync-system',
+        {
+            title: 'Sync System',
+            description: 'Synchronize disk changes to the SilverBullet client and reload the Lua environment. Use after writing Space Lua or Templates to disk.',
+            inputSchema: {
+                applyToSpace: z.boolean().optional().describe('If true, performs a full "Reindex All" after reloading.'),
+            },
+        },
+        async ({ applyToSpace }: any) => {
+            const result = await syncSystem(applyToSpace);
+            return {
+                content: [{ type: 'text', text: result.message }],
+            };
+        }
+    );
+
+    (server as any).registerTool(
+        'run-query',
+        {
+            title: 'Run Query',
+            description: 'Execute a Lua Integrated Query (LIQ) against the SilverBullet index and return results as JSON.',
+            inputSchema: {
+                query: z.string().describe('The query string, e.g., "from index.tag \\"task\\"".'),
+            },
+        },
+        async ({ query }: any) => {
+            const result = await runQuery(query);
+            return {
+                content: [{ type: 'text', text: JSON.stringify(result.results, null, 2) }],
+            };
+        }
+    );
+
+    (server as any).registerTool(
+        'validate-lua',
+        {
+            title: 'Validate Lua',
+            description: 'Check Space Lua code for syntax errors without writing to disk.',
+            inputSchema: {
+                code: z.string().describe('The Lua code block to validate.'),
+            },
+        },
+        async ({ code }: any) => {
+            const result = await validateLua(code);
+            return {
+                content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+            };
         }
     );
 }
